@@ -1,192 +1,124 @@
 import streamlit as st
 import pandas as pd
+import json
 
-# Set page configuration
+# Configuración de la página
 st.set_page_config(
-    page_title="Job Portal",
+    page_title="Portal de Empleos",
     page_icon="💼",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Add title and description
-st.title("Job Portal")
-st.write("Browse available job opportunities and select positions you're interested in.")
+# Título y descripción
+st.title("Portal de Empleos")
+st.write("Explora ofertas de trabajo disponibles en el sector tecnológico.")
 
-# Sample job data
-jobs_data = {
-    "Title": [
-        "Software Engineer", 
-        "Data Scientist", 
-        "Product Manager", 
-        "UX Designer", 
-        "DevOps Engineer",
-        "Marketing Specialist",
-        "Sales Representative",
-        "Customer Support",
-        "HR Manager",
-        "Financial Analyst"
-    ],
-    "Company": [
-        "Tech Co", 
-        "Data Inc", 
-        "Product Labs", 
-        "Design Studio", 
-        "Cloud Systems",
-        "Marketing Pro",
-        "Sales Force",
-        "Support Hub",
-        "People First",
-        "Finance Group"
-    ],
-    "Location": [
-        "Remote", 
-        "New York", 
-        "San Francisco", 
-        "London", 
-        "Berlin",
-        "Toronto",
-        "Sydney",
-        "Singapore",
-        "Paris",
-        "Tokyo"
-    ],
-    "Type": [
-        "Full-time",
-        "Full-time",
-        "Contract",
-        "Part-time",
-        "Full-time",
-        "Full-time",
-        "Commission",
-        "Part-time",
-        "Full-time",
-        "Contract"
-    ],
-    "Salary": [
-        "$120,000", 
-        "$130,000", 
-        "$140,000", 
-        "$110,000", 
-        "$125,000",
-        "$80,000",
-        "$70,000 + commission",
-        "$55,000",
-        "$95,000",
-        "$105,000"
-    ],
-    "Experience": [
-        "3+ years",
-        "2+ years",
-        "5+ years",
-        "3+ years",
-        "4+ years",
-        "2+ years",
-        "1+ years",
-        "Entry level",
-        "7+ years",
-        "3+ years"
-    ],
-    "Posted": [
-        "2023-04-01",
-        "2023-04-03",
-        "2023-04-05",
-        "2023-04-07",
-        "2023-04-10",
-        "2023-04-12",
-        "2023-04-15",
-        "2023-04-18",
-        "2023-04-20",
-        "2023-04-22"
-    ]
-}
+# Cargar datos desde el archivo JSON
+@st.cache_data
+def load_data():
+    try:
+        with open("joined_data_standar.json", "r", encoding="utf-8") as file:
+            data = json.load(file)
+        
+        # Extraer solo los campos requeridos
+        filtered_data = []
+        for job in data:
+            filtered_data.append({
+                "title": job.get("title", ""),
+                "company": job.get("company", ""),
+                "date": job.get("date", ""),
+                "location": job.get("location", ""),
+                "source": job.get("source", ""),
+                "link": job.get("link", "")
+            })
+        
+        return pd.DataFrame(filtered_data)
+    except Exception as e:
+        st.error(f"Error al cargar el archivo JSON: {e}")
+        return pd.DataFrame()
 
-# Create dataframe
-jobs_df = pd.DataFrame(jobs_data)
+# Cargar los datos
+jobs_df = load_data()
 
-# Add sidebar filters
-st.sidebar.header("Filter Jobs")
-
-# Location filter
-locations = ["All"] + sorted(jobs_df["Location"].unique().tolist())
-selected_location = st.sidebar.selectbox("Location", locations)
-
-# Job type filter
-job_types = ["All"] + sorted(jobs_df["Type"].unique().tolist())
-selected_type = st.sidebar.selectbox("Job Type", job_types)
-
-# Experience level filter
-experience_filter = st.sidebar.slider(
-    "Experience (years)",
-    0, 10, (0, 10)
-)
-
-# Apply filters
-filtered_df = jobs_df.copy()
-
-if selected_location != "All":
-    filtered_df = filtered_df[filtered_df["Location"] == selected_location]
-
-if selected_type != "All":
-    filtered_df = filtered_df[filtered_df["Type"] == selected_type]
-
-# Filter by experience (extract numeric value from experience string)
-filtered_df["Experience_Numeric"] = filtered_df["Experience"].str.extract(r'(\d+)').fillna(0).astype(int)
-filtered_df = filtered_df[
-    (filtered_df["Experience_Numeric"] >= experience_filter[0]) & 
-    (filtered_df["Experience_Numeric"] <= experience_filter[1])
-]
-filtered_df = filtered_df.drop(columns=["Experience_Numeric"])
-
-# Display number of results
-st.write(f"Showing {len(filtered_df)} of {len(jobs_df)} jobs")
-
-# Display as interactive dataframe with selection
-job_selection = st.dataframe(
-    filtered_df,
-    column_config={
-        "Title": st.column_config.TextColumn("Job Title", width="medium"),
-        "Company": st.column_config.TextColumn("Company", width="medium"),
-        "Location": st.column_config.TextColumn("Location", width="small"),
-        "Type": st.column_config.TextColumn("Job Type", width="small"),
-        "Salary": st.column_config.TextColumn("Salary", width="small"),
-        "Experience": st.column_config.TextColumn("Experience", width="small"),
-        "Posted": st.column_config.DateColumn("Posted Date", format="MMM DD, YYYY", width="small"),
-    },
-    use_container_width=True,
-    hide_index=True,
-    selection_mode="multi-row",
-    on_select="rerun"
-)
-
-# Show selected jobs
-if hasattr(job_selection, 'selection') and job_selection.selection.rows:
-    st.header("Selected Jobs")
-    selected_indices = job_selection.selection.rows
-    selected_jobs = filtered_df.iloc[selected_indices]
+if not jobs_df.empty:
+    # Añadir filtros en la barra lateral
+    st.sidebar.header("Filtros")
     
-    st.dataframe(
-        selected_jobs,
+    # Filtro de empresa
+    companies = ["Todas"] + sorted(jobs_df["company"].unique().tolist())
+    selected_company = st.sidebar.selectbox("Empresa", companies)
+    
+    # Filtro de ubicación
+    locations = ["Todas"] + sorted(jobs_df["location"].unique().tolist())
+    selected_location = st.sidebar.selectbox("Ubicación", locations)
+    
+    # Filtro de fuente
+    sources = ["Todas"] + sorted(jobs_df["source"].unique().tolist())
+    selected_source = st.sidebar.selectbox("Fuente", sources)
+    
+    # Aplicar filtros
+    filtered_df = jobs_df.copy()
+    
+    if selected_company != "Todas":
+        filtered_df = filtered_df[filtered_df["company"] == selected_company]
+    
+    if selected_location != "Todas":
+        filtered_df = filtered_df[filtered_df["location"] == selected_location]
+    
+    if selected_source != "Todas":
+        filtered_df = filtered_df[filtered_df["source"] == selected_source]
+    
+    # Mostrar número de resultados
+    st.write(f"Mostrando {len(filtered_df)} de {len(jobs_df)} ofertas de trabajo")
+    
+    # Mostrar como dataframe interactivo con selección
+    job_selection = st.dataframe(
+        filtered_df,
+        column_config={
+            "title": st.column_config.TextColumn("Título del Puesto", width="large"),
+            "company": st.column_config.TextColumn("Empresa", width="medium"),
+            "date": st.column_config.DateColumn("Fecha", format="DD/MM/YYYY", width="small"),
+            "location": st.column_config.TextColumn("Ubicación", width="medium"),
+            "source": st.column_config.TextColumn("Fuente", width="small"),
+            "link": st.column_config.LinkColumn("Enlace", width="small"),
+        },
         use_container_width=True,
-        hide_index=True
+        hide_index=True,
+        selection_mode="multi-row",
+        on_select="rerun"
     )
     
-    # Add application button for selected jobs
-    if st.button("Apply for Selected Jobs"):
-        st.success(f"Application submitted for {len(selected_indices)} jobs!")
+    # Mostrar trabajos seleccionados
+    if hasattr(job_selection, 'selection') and job_selection.selection.rows:
+        st.header("Ofertas Seleccionadas")
+        selected_indices = job_selection.selection.rows
+        selected_jobs = filtered_df.iloc[selected_indices]
         
-        # Display application form (in a real app, this would be more sophisticated)
-        with st.expander("Application Details", expanded=True):
-            st.text_input("Full Name")
-            st.text_input("Email")
-            st.text_input("Phone")
-            st.file_uploader("Upload Resume (PDF)", type=["pdf"])
-            st.text_area("Cover Letter")
-            if st.button("Submit Application"):
-                st.success("Your application has been submitted successfully!")
+        st.dataframe(
+            selected_jobs,
+            use_container_width=True,
+            hide_index=True
+        )
+        
+        # Añadir botón de aplicación para trabajos seleccionados
+        if st.button("Aplicar a las Ofertas Seleccionadas"):
+            st.success(f"¡Solicitud enviada para {len(selected_indices)} ofertas!")
+            
+            # Mostrar formulario de solicitud
+            with st.expander("Detalles de la Aplicación", expanded=True):
+                st.text_input("Nombre Completo")
+                st.text_input("Email")
+                st.text_input("Teléfono")
+                st.file_uploader("Subir CV (PDF)", type=["pdf"])
+                st.text_area("Carta de Presentación")
+                if st.button("Enviar Solicitud"):
+                    st.success("¡Tu solicitud ha sido enviada correctamente!")
+    else:
+        st.info("Selecciona las ofertas que te interesen haciendo clic en las filas de la tabla.")
 else:
-    st.info("Select jobs you're interested in by clicking on rows in the table above.")
+    st.error("No se pudieron cargar los datos. Verifica que el archivo 'joined_data_standar.json' exista y tenga el formato correcto.")
 
-# Add footer
+# Añadir pie de página
 st.markdown("---")
-st.caption("Job Portal Demo - Built with Streamlit")
+st.caption("Portal de Empleos - Construido con Streamlit")
