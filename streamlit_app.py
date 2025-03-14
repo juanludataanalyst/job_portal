@@ -103,6 +103,34 @@ if jobs_data:
     }
     .job-link {
         text-align: right;
+        margin-top: 15px;
+    }
+    .job-link a {
+        display: inline-block;
+        background-color: #4CAF50;
+        color: white;
+        padding: 8px 15px;
+        text-decoration: none;
+        border-radius: 5px;
+        font-size: 14px;
+        transition: background-color 0.3s;
+    }
+    .job-link a:hover {
+        background-color: #45a049;
+    }
+    .job-skills {
+        margin-top: 15px;
+    }
+    .skill-tag {
+        display: inline-block;
+        background-color: #E8F5E9;
+        color: #2E7D32;
+        padding: 5px 10px;
+        margin-right: 8px;
+        margin-bottom: 8px;
+        border-radius: 15px;
+        font-size: 12px;
+        font-weight: 500;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -119,7 +147,16 @@ if jobs_data:
             except:
                 formatted_date = date_str
             
-            # Crear la tarjeta HTML
+            # Obtener las habilidades
+            skills = job.get("skills", [])
+            skills_html = ""
+            if skills:
+                skills_html = '<div class="job-skills">'
+                for skill in skills:
+                    skills_html += f'<span class="skill-tag">{skill}</span>'
+                skills_html += '</div>'
+            
+            # Crear la tarjeta HTML con enlace directo
             job_html = f"""
             <div class="job-card">
                 <div class="job-title">{job.get("title", "")}</div>
@@ -129,30 +166,13 @@ if jobs_data:
                     <span>📅 {formatted_date}</span>
                     <span>🔍 {job.get("source", "")}</span>
                 </div>
+                {skills_html}
                 <div class="job-link">
                     <a href="{job.get("link", "")}" target="_blank">Ver oferta</a>
                 </div>
             </div>
             """
             st.markdown(job_html, unsafe_allow_html=True)
-            
-            # Añadir botones de acción
-            col1, col2 = st.columns([1, 4])
-            with col1:
-                if st.button(f"Aplicar 📝", key=f"apply_{job.get('id', '')}"):
-                    st.session_state[f"show_form_{job.get('id', '')}"] = True
-            
-            # Mostrar formulario si se ha pulsado el botón
-            if st.session_state.get(f"show_form_{job.get('id', '')}", False):
-                with st.expander("Formulario de aplicación", expanded=True):
-                    st.write(f"Aplicando a: {job.get('title', '')} en {job.get('company', '')}")
-                    st.text_input("Nombre completo")
-                    st.text_input("Email")
-                    st.text_input("Teléfono")
-                    st.file_uploader("Subir CV (PDF)", type=["pdf"])
-                    if st.button("Enviar solicitud", key=f"submit_{job.get('id', '')}"):
-                        st.success("¡Tu solicitud ha sido enviada correctamente!")
-                        st.session_state[f"show_form_{job.get('id', '')}"] = False
             
             st.markdown("---")
 else:
