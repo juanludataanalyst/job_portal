@@ -1,22 +1,47 @@
 import json
+import pickle
+import torch
 from sentence_transformers import SentenceTransformer
+from sentence_transformers.util import cos_sim
 
-# Paso 1: Cargar el archivo JSON
-with open("joined_data_standar.json", "r", encoding="utf-8") as file:
-    ofertas = json.load(file)
+# Cargar modelo InstructorXL
+print("Cargando el modelo InstructorXL...")
+try:
+    model = SentenceTransformer("hkunlp/instructor-xl")
+    print("Modelo cargado exitosamente.")
+except Exception as e:
+    print(f"Error al cargar el modelo: {e}")
+    exit()
 
-# Paso 2: Cargar el modelo de embeddings
-model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
+# Cargar datos de ofertas de empleo
+print("Cargando el archivo JSON...")
+try:
+    with open("joined_data_standar.json", "r", encoding="utf-8") as f:
+        job_offers = json.load(f)
+    print(f"Se cargaron {len(job_offers)} ofertas de empleo.")
+except Exception as e:
+    print(f"Error al cargar el JSON: {e}")
+    exit()
 
-# Paso 3: Generar embeddings para cada descripción
-print("Generando embeddings para", len(ofertas), "ofertas...")
-for oferta in ofertas:
-    descripcion = oferta["description"]  # Asumimos que "description" es la clave en tu JSON
-    embedding = model.encode(descripcion, show_progress_bar=True)
-    oferta["embedding"] = embedding.tolist()  # Convertimos el embedding a lista para guardarlo en JSON
+# Procesar las ofertas de empleo y generar embeddings
+job_vectors = {}
+for i, job in enumerate(job_offers):
+    print(f"Procesando oferta {i + 1}/{len(job_offers)}: {job['title']}")
+    try:
+        job_text = f"Title: {job['title']}. Description: {job['description']}. Skills: {', '.join(job['skills'])}"
+        instruction = "Represent this job offer for a job matching system"
+        embedding = model.encode([[instruction, job_text]])[0]
+        job_vectors[job["id"]] = {"embedding": embedding, "data": job}
+        print(f"Embedding generado para ID: {job['id']}")
+    except Exception as e:
+        print(f"Error al procesar la oferta {job['title']}: {e}")
+        continue
 
-# Paso 4: Guardar las ofertas con los embeddings en un nuevo archivo JSON
-with open("ofertas_con_embeddings.json", "w", encoding="utf-8") as file:
-    json.dump(ofertas, file, ensure_ascii=False, indent=4)
-
-print("Ofertas con embeddings guardadas en 'ofertas_con_embeddings.json'.")
+# Guardar embeddings en un archivo
+print("Guardando los vectores en job_vectors.pkl...")
+try:
+    with open("job_vectors.pkl", "wb") as f:
+        pickle.dump(job_vectors, f)
+    print("Espacio vectorial creado y guardado en job_vectors.pkl")
+except Exception as e:
+    print(f"Error al guardar el archivo: {e}")
