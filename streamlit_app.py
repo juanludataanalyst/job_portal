@@ -7,6 +7,7 @@ import os
 from together import Together
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
+import re
 
 # Configuración de la página
 st.set_page_config(
@@ -38,6 +39,17 @@ def load_job_vectors():
         st.error(f"Error al cargar job_vectors.pkl: {e}")
         return {}
 
+# Función para cargar las reglas de filtrado
+@st.cache_data
+def load_filter_rules():
+    try:
+        with open("filter_rules.json", "r", encoding="utf-8") as f:
+            rules_data = json.load(f)
+        return rules_data["rules"]
+    except Exception as e:
+        st.error(f"Error al cargar filter_rules.json: {e}")
+        return []
+
 # Función para obtener el embedding de la consulta usando Together AI
 def get_query_embedding(query, api_key):
     os.environ['TOGETHER_API_KEY'] = api_key
@@ -48,14 +60,94 @@ def get_query_embedding(query, api_key):
     )
     return response.data[0].embedding
 
+# Función para aplicar una condición de filtrado
+def apply_condition(job, field, condition, value):
+    field_value = job.get(field, "")
+    if isinstance(field_value, list):
+        field_value = " ".join(field_value).lower()
+    else:
+        field_value = str(field_value).lower()
+
+    if condition == "not_contains":
+        return value.lower() not in field_value
+    elif condition == "less_than_years":
+        # Extraer años de experiencia del texto
+        years_match = re.search(r"(\d+)\s*years\s*of\s*experience", field_value)
+        if years_match:
+            years = int(years_match.group(1))
+            return years < int(value)
+        return True  # Si no se encuentra, no filtrar
+    elif condition == "more_than_years":
+        years_match = re.search(r"(\d+)\s*years\s*of\s*experience", field_value)
+        if years_match:
+            years = int(years_match.group(1))
+            return years > int(value)
+        return True
+    elif condition == "at_least_years":
+        years_match = re.search(r"(\d+)\s*years\s*of\s*experience", field_value)
+        if years_match:
+            years = int(years_match.group(1))
+            return years >= int(value)
+        return True
+    elif condition == "under_years":
+        years_match = re.search(r"(\d+)\s*years\s*of\s*experience", field_value)
+        if years_match:
+            years = int(years_match.group(1))
+            return years < int(value)
+        return True
+    elif condition == "over_years":
+        years_match = re.search(r"(\d+)\s*years\s*of\s*experience", field_value)
+        if years_match:
+            years = int(years_match.group(1))
+            return years > int(value)
+        return True
+    return True
+
+# Función para filtrar ofertas según las reglas
+def filter_jobs_with_rules(jobs_with_similarities, query, rules):
+    query = query.lower()
+    filtered_jobs = []
+
+    for job_id, similarity, job in jobs_with_similarities:
+        passes_filters = True
+        for rule in rules:
+            pattern = rule["pattern"]
+            # Reemplazar regex dinámicos en el patrón
+            if "(.*)" in pattern or "(\\d+)" in pattern or "(\\w+)" in pattern:
+                match = re.search(pattern, query)
+                if match:
+                    if "(\\d+)" in pattern:
+                        value = match.group(1)  # Número para años
+                    elif "(\\w+)" in pattern:
+                        value = match.group(1)  # Palabra para ubicaciones u otros
+                    else:
+                        value = match.group(1)  # Valor genérico
+                    if not apply_condition(job, rule["field"], rule["condition"], value):
+                        passes_filters = False
+                        break
+            else:
+                if pattern in query:
+                    if not apply_condition(job, rule["field"], rule["condition"], rule["value"]):
+                        passes_filters = False
+                        break
+        if passes_filters:
+            filtered_jobs.append((job_id, similarity, job))
+
+    return filtered_jobs
+
 # Función para calcular las ofertas más relevantes
 def get_top_similar_jobs(query_embedding, job_vectors, top_n=10):
     similarities = []
     for job_id, job_data in job_vectors.items():
-        job_embedding = np.array(job_data["embedding"]).reshape(1, -1)
+        job_embedding = np.array(job_data["embedding"])
+        if job_embedding.shape != (1024,):
+            st.warning(f"Embedding incorrecto para job_id {job_id}: {job_embedding.shape}")
+            continue
+        job_embedding = job_embedding.reshape(1, -1)
         query_embedding_array = np.array(query_embedding).reshape(1, -1)
         similarity = cosine_similarity(query_embedding_array, job_embedding)[0][0]
-        similarities.append((job_id, similarity, job_data["data"]))
+        if similarity > 0.5:  # Filtrar similitudes mayores a 0.5
+            similarities.append((job_id, similarity, job_data["data"]))
 
     # Ordenar por similitud descendente
     similarities.sort(key=lambda x: x[1], reverse=True)
@@ -229,7 +321,7 @@ with tabs[1]:
     st.write("Busca ofertas de trabajo usando una consulta semántica.")
     
     # Campo de entrada para la consulta
-    user_query = st.text_input("Ingresa tu consulta (ejemplo: 'AI engineer with Python')", "")
+    user_query = st.text_input("Ingresa tu consulta (ejemplo: 'AI engineer with Python not freelancer less than 5 years of experience')", "")
     
     # Botón para generar el embedding y buscar
     if st.button("Buscar Ofertas"):
@@ -242,49 +334,59 @@ with tabs[1]:
                 job_vectors = load_job_vectors()
                 
                 if job_vectors:
-                    # Obtener las 10 ofertas más relevantes
+                    # Obtener las ofertas más relevantes (similitud > 0.5)
                     top_jobs = get_top_similar_jobs(query_embedding, job_vectors, top_n=10)
-                    st.write(f"Mostrando las {len(top_jobs)} ofertas más relevantes:")
                     
-                    # Mostrar las ofertas como tarjetas
-                    for job_id, similarity, job in top_jobs:
-                        with st.container():
-                            # Formatear la fecha
-                            date_str = job.get("date", "")
-                            try:
-                                date_obj = datetime.strptime(date_str, "%Y-%m-%d")
-                                formatted_date = date_obj.strftime("%d %b, %Y")
-                            except:
-                                formatted_date = date_str
-                            
-                            # Obtener las habilidades
-                            skills = job.get("skills", [])
-                            skills_html = ""
-                            if skills:
-                                skills_html = '<div class="job-skills">'
-                                for skill in skills:
-                                    skills_html += f'<span class="skill-tag">{skill}</span>'
-                                skills_html += '</div>'
-                            
-                            # Crear la tarjeta HTML con enlace directo
-                            job_html = f"""
-                            <div class="job-card">
-                                <div class="job-title">{job.get("title", "")}</div>
-                                <div class="job-company">{job.get("company", "")}</div>
-                                <div class="job-details">
-                                    <span>📍 {job.get("location", "")}</span>
-                                    <span>📅 {formatted_date}</span>
-                                    <span>🔍 {job.get("source", "")}</span>
+                    # Cargar las reglas de filtrado
+                    rules = load_filter_rules()
+                    
+                    # Aplicar las reglas de filtrado
+                    filtered_jobs = filter_jobs_with_rules(top_jobs, user_query, rules)
+                    
+                    if filtered_jobs:
+                        st.write(f"Mostrando las {len(filtered_jobs)} ofertas más relevantes (similitud > 0.5):")
+                        
+                        # Mostrar las ofertas como tarjetas
+                        for job_id, similarity, job in filtered_jobs:
+                            with st.container():
+                                # Formatear la fecha
+                                date_str = job.get("date", "")
+                                try:
+                                    date_obj = datetime.strptime(date_str, "%Y-%m-%d")
+                                    formatted_date = date_obj.strftime("%d %b, %Y")
+                                except:
+                                    formatted_date = date_str
+                                
+                                # Obtener las habilidades
+                                skills = job.get("skills", [])
+                                skills_html = ""
+                                if skills:
+                                    skills_html = '<div class="job-skills">'
+                                    for skill in skills:
+                                        skills_html += f'<span class="skill-tag">{skill}</span>'
+                                    skills_html += '</div>'
+                                
+                                # Crear la tarjeta HTML con enlace directo
+                                job_html = f"""
+                                <div class="job-card">
+                                    <div class="job-title">{job.get("title", "")}</div>
+                                    <div class="job-company">{job.get("company", "")}</div>
+                                    <div class="job-details">
+                                        <span>📍 {job.get("location", "")}</span>
+                                        <span>📅 {formatted_date}</span>
+                                        <span>🔍 {job.get("source", "")}</span>
+                                    </div>
+                                    {skills_html}
+                                    <div class="job-link">
+                                        <a href="{job.get("link", "")}" target="_blank">Ver oferta</a>
+                                    </div>
                                 </div>
-                                {skills_html}
-                                <div class="job-link">
-                                    <a href="{job.get("link", "")}" target="_blank">Ver oferta</a>
-                                </div>
-                            </div>
-                            """
-                            st.markdown(job_html, unsafe_allow_html=True)
-                            st.write(f"Similitud: {similarity:.4f}")
-                            st.markdown("---")
+                                """
+                                st.markdown(job_html, unsafe_allow_html=True)
+                                st.write(f"Similitud: {similarity:.4f}")
+                                st.markdown("---")
+                    else:
+                        st.warning("No se encontraron ofertas que cumplan con los criterios de filtrado y similitud.")
                 else:
                     st.error("No se pudieron cargar los vectores precalculados.")
             except Exception as e:
