@@ -1,9 +1,12 @@
 import streamlit as st
 import pandas as pd
 import json
+import pickle
 from datetime import datetime
-import os  # Añadimos esta importación para usar os.environ
+import os
 from together import Together
+from sklearn.metrics.pairwise import cosine_similarity
+import numpy as np
 
 # Configuración de la página
 st.set_page_config(
@@ -24,6 +27,17 @@ def load_data():
         st.error(f"Error al cargar el archivo JSON: {e}")
         return []
 
+# Función para cargar los vectores precalculados
+@st.cache_data
+def load_job_vectors():
+    try:
+        with open("job_vectors.pkl", "rb") as f:
+            job_vectors = pickle.load(f)
+        return job_vectors
+    except Exception as e:
+        st.error(f"Error al cargar job_vectors.pkl: {e}")
+        return {}
+
 # Función para obtener el embedding de la consulta usando Together AI
 def get_query_embedding(query, api_key):
     os.environ['TOGETHER_API_KEY'] = api_key
@@ -33,6 +47,20 @@ def get_query_embedding(query, api_key):
         input=[query]
     )
     return response.data[0].embedding
+
+# Función para calcular las ofertas más relevantes
+def get_top_similar_jobs(query_embedding, job_vectors, top_n=10):
+    similarities = []
+    for job_id, job_data in job_vectors.items():
+        job_embedding = np.array(job_data["embedding"]).reshape(1, -1)
+        query_embedding_array = np.array(query_embedding).reshape(1, -1)
+        similarity = cosine_similarity(query_embedding_array, job_embedding)[0][0]
+        similarities.append((job_id, similarity, job_data["data"]))
+
+    # Ordenar por similitud descendente
+    similarities.sort(key=lambda x: x[1], reverse=True)
+    # Devolver las top_n ofertas
+    return similarities[:top_n]
 
 # Título y pestañas
 st.title("Portal de Empleos Tech")
@@ -203,16 +231,64 @@ with tabs[1]:
     # Campo de entrada para la consulta
     user_query = st.text_input("Ingresa tu consulta (ejemplo: 'AI engineer with Python')", "")
     
-    # Botón para generar el embedding
-    if st.button("Generar Embedding"):
+    # Botón para generar el embedding y buscar
+    if st.button("Buscar Ofertas"):
         if user_query:
             try:
                 api_key = st.secrets["together"]["TOGETHER_API_KEY"]
-                embedding = get_query_embedding(user_query, api_key)
-                st.write(f"Vector de embedding (primeros 10 valores): {embedding[:10]}... (total {len(embedding)} dimensiones)")
-                st.json({"embedding": embedding.tolist()})
+                # Obtener el embedding de la consulta
+                query_embedding = get_query_embedding(user_query, api_key)
+                # Cargar los vectores precalculados
+                job_vectors = load_job_vectors()
+                
+                if job_vectors:
+                    # Obtener las 10 ofertas más relevantes
+                    top_jobs = get_top_similar_jobs(query_embedding, job_vectors, top_n=10)
+                    st.write(f"Mostrando las {len(top_jobs)} ofertas más relevantes:")
+                    
+                    # Mostrar las ofertas como tarjetas
+                    for job_id, similarity, job in top_jobs:
+                        with st.container():
+                            # Formatear la fecha
+                            date_str = job.get("date", "")
+                            try:
+                                date_obj = datetime.strptime(date_str, "%Y-%m-%d")
+                                formatted_date = date_obj.strftime("%d %b, %Y")
+                            except:
+                                formatted_date = date_str
+                            
+                            # Obtener las habilidades
+                            skills = job.get("skills", [])
+                            skills_html = ""
+                            if skills:
+                                skills_html = '<div class="job-skills">'
+                                for skill in skills:
+                                    skills_html += f'<span class="skill-tag">{skill}</span>'
+                                skills_html += '</div>'
+                            
+                            # Crear la tarjeta HTML con enlace directo
+                            job_html = f"""
+                            <div class="job-card">
+                                <div class="job-title">{job.get("title", "")}</div>
+                                <div class="job-company">{job.get("company", "")}</div>
+                                <div class="job-details">
+                                    <span>📍 {job.get("location", "")}</span>
+                                    <span>📅 {formatted_date}</span>
+                                    <span>🔍 {job.get("source", "")}</span>
+                                </div>
+                                {skills_html}
+                                <div class="job-link">
+                                    <a href="{job.get("link", "")}" target="_blank">Ver oferta</a>
+                                </div>
+                            </div>
+                            """
+                            st.markdown(job_html, unsafe_allow_html=True)
+                            st.write(f"Similitud: {similarity:.4f}")
+                            st.markdown("---")
+                else:
+                    st.error("No se pudieron cargar los vectores precalculados.")
             except Exception as e:
-                st.error(f"Error al generar el embedding: {e}")
+                st.error(f"Error al procesar la consulta: {e}")
         else:
             st.warning("Por favor, ingresa una consulta.")
 
