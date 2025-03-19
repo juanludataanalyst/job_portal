@@ -98,22 +98,17 @@ Keep explanations concise and focused on the match between query and job require
     
     # Parse the response
     try:
-        # Try to extract JSON from the response
-        # First attempt: direct JSON parsing
         try:
             return json.loads(explanation)
         except:
-            # Second attempt: extract JSON if it's wrapped in code blocks or has text before/after
             json_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', explanation)
             if json_match:
                 return json.loads(json_match.group(1))
             else:
-                # If still not found, try to extract anything that looks like JSON
                 json_match = re.search(r'({[\s\S]*})', explanation)
                 if json_match:
                     return json.loads(json_match.group(1))
                 else:
-                    # If all else fails, create a structured response from the text
                     return {
                         "overall_explanation": explanation,
                         "job_explanations": {}
@@ -147,17 +142,6 @@ def load_job_vectors():
         st.error(f"Error al cargar job_vectors.pkl: {e}")
         return {}
 
-# Función para cargar las reglas de filtrado
-@st.cache_data
-def load_filter_rules():
-    try:
-        with open("filter_rules.json", "r", encoding="utf-8") as f:
-            rules_data = json.load(f)
-        return rules_data["rules"]
-    except Exception as e:
-        st.error(f"Error al cargar filter_rules.json: {e}")
-        return []
-
 # Función para obtener el embedding de la consulta usando Together AI
 def get_query_embedding(query, api_key):
     os.environ['TOGETHER_API_KEY'] = api_key
@@ -167,81 +151,6 @@ def get_query_embedding(query, api_key):
         input=[query]
     )
     return response.data[0].embedding
-
-# Función para aplicar una condición de filtrado
-def apply_condition(job, field, condition, value):
-    field_value = job.get(field, "")
-    if isinstance(field_value, list):
-        field_value = " ".join(field_value).lower()
-    else:
-        field_value = str(field_value).lower()
-
-    if condition == "not_contains":
-        return value.lower() not in field_value
-    elif condition == "less_than_years":
-        # Extraer años de experiencia del texto
-        years_match = re.search(r"(\d+)\s*years\s*of\s*experience", field_value)
-        if years_match:
-            years = int(years_match.group(1))
-            return years < int(value)
-        return True  # Si no se encuentra, no filtrar
-    elif condition == "more_than_years":
-        years_match = re.search(r"(\d+)\s*years\s*of\s*experience", field_value)
-        if years_match:
-            years = int(years_match.group(1))
-            return years > int(value)
-        return True
-    elif condition == "at_least_years":
-        years_match = re.search(r"(\d+)\s*years\s*of\s*experience", field_value)
-        if years_match:
-            years = int(years_match.group(1))
-            return years >= int(value)
-        return True
-    elif condition == "under_years":
-        years_match = re.search(r"(\d+)\s*years\s*of\s*experience", field_value)
-        if years_match:
-            years = int(years_match.group(1))
-            return years < int(value)
-        return True
-    elif condition == "over_years":
-        years_match = re.search(r"(\d+)\s*years\s*of\s*experience", field_value)
-        if years_match:
-            years = int(years_match.group(1))
-            return years > int(value)
-        return True
-    return True
-
-# Función para filtrar ofertas según las reglas
-def filter_jobs_with_rules(jobs_with_similarities, query, rules):
-    query = query.lower()
-    filtered_jobs = []
-
-    for job_id, similarity, job in jobs_with_similarities:
-        passes_filters = True
-        for rule in rules:
-            pattern = rule["pattern"]
-            # Reemplazar regex dinámicos en el patrón
-            if "(.*)" in pattern or "(\\d+)" in pattern or "(\\w+)" in pattern:
-                match = re.search(pattern, query)
-                if match:
-                    if "(\\d+)" in pattern:
-                        value = match.group(1)  # Número para años
-                    elif "(\\w+)" in pattern:
-                        value = match.group(1)  # Palabra para ubicaciones u otros
-                    else:
-                        value = match.group(1)  # Valor genérico
-                    if not apply_condition(job, rule["field"], rule["condition"], value):
-                        passes_filters = False
-                        break
-            else:
-                if pattern in query:
-                    if not apply_condition(job, rule["field"], rule["condition"], rule["value"]):
-                        passes_filters = False
-                        break
-        if passes_filters:
-            filtered_jobs.append((job_id, similarity, job))
-
-    return filtered_jobs
 
 # Función para calcular las ofertas más relevantes
 def get_top_similar_jobs(query_embedding, job_vectors, top_n=10):
@@ -442,7 +351,7 @@ with tabs[1]:
     st.write("Busca ofertas de trabajo usando una consulta semántica.")
     
     # Campo de entrada para la consulta
-    user_query = st.text_input("Ingresa tu consulta (ejemplo: 'AI engineer with Python not freelancer less than 5 years of experience')", "")
+    user_query = st.text_input("Ingresa tu consulta (ejemplo: 'AI engineer with Python')", "")
     
     # Opción para mostrar explicaciones de IA
     show_ai_explanations = st.checkbox("Mostrar explicaciones de IA", value=True)
@@ -467,18 +376,12 @@ with tabs[1]:
                         # Obtener las ofertas más relevantes (similitud > 0.5)
                         top_jobs = get_top_similar_jobs(query_embedding, job_vectors, top_n=10)
                         
-                        # Cargar las reglas de filtrado
-                        rules = load_filter_rules()
-                        
-                        # Aplicar las reglas de filtrado
-                        filtered_jobs = filter_jobs_with_rules(top_jobs, user_query, rules)
-                        
-                        if filtered_jobs:
+                        if top_jobs:
                             # Si se solicitan explicaciones de IA
                             ai_explanations = {}
                             if show_ai_explanations:
                                 with st.spinner("Generando explicaciones con IA..."):
-                                    ai_explanations = generate_ai_explanation(filtered_jobs, user_query, client)
+                                    ai_explanations = generate_ai_explanation(top_jobs, user_query, client)
                             
                             # Mostrar explicación general si existe
                             if show_ai_explanations and "overall_explanation" in ai_explanations:
@@ -489,10 +392,10 @@ with tabs[1]:
                                 </div>
                                 """, unsafe_allow_html=True)
                             
-                            st.write(f"Mostrando las {len(filtered_jobs)} ofertas más relevantes (similitud > 0.5):")
+                            st.write(f"Mostrando las {len(top_jobs)} ofertas más relevantes (similitud > 0.5):")
                             
                             # Mostrar las ofertas como tarjetas
-                            for job_id, similarity, job in filtered_jobs:
+                            for job_id, similarity, job in top_jobs:
                                 with st.container():
                                     # Formatear la fecha
                                     date_str = job.get("date", "")
@@ -541,13 +444,12 @@ with tabs[1]:
                                     st.markdown(job_html, unsafe_allow_html=True)
                                     st.markdown("---")
                         else:
-                            st.warning("No se encontraron ofertas que cumplan con los criterios de filtrado y similitud.")
+                            st.warning("No se encontraron ofertas con similitud mayor a 0.5.")
                             
                             # Ofrecer sugerencias si no hay resultados
                             st.info("""
                             Sugerencias para mejorar tu búsqueda:
                             - Utiliza términos más generales
-                            - Reduce los criterios de filtrado
                             - Prueba con tecnologías o habilidades relacionadas
                             """)
                     else:
