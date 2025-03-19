@@ -1,3 +1,5 @@
+import json
+
 def get_ai_explanation_prompt(jobs, user_query):
     # Prepare job data for the model (limited to essential fields)
     job_data = []
