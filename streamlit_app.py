@@ -7,8 +7,8 @@ import gdown
 from together import Together
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
-from prompts import get_ai_explanation_prompt
 import re
+from prompts import get_ai_explanation_prompt
 
 # Page configuration
 st.set_page_config(
@@ -26,8 +26,8 @@ DEEPSEEK_MODEL = "deepseek-ai/DeepSeek-R1-Distill-Llama-70B-free"
 LLAMA_MODEL = "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
 
 # Google Drive file IDs
-JOINED_DATA_FILE_ID = "1ZgEJcIPdZstOwF0UVc0GJd4SBwmFDVBt"  # Reemplaza con el ID de joined_data_standar.json
-JOB_VECTORS_FILE_ID = "14ZsyQgkxjkKRIQtBNi8H7eX9yJaPbo5H"  # Reemplaza con el ID de job_vectors.pkl
+JOINED_DATA_FILE_ID = "1ZgEJcIPdZstOwF0UVc0GJd4SBwmFDVBt"
+JOB_VECTORS_FILE_ID = "14ZsyQgkxjkKRIQtBNi8H7eX9yJaPbo5H"
 
 # Function to download file from Google Drive
 @st.cache_data
@@ -74,7 +74,7 @@ def load_job_vectors():
         st.error(f"Error loading job_vectors.pkl: {e}")
         return {}
 
-# Function to generate text model response (unchanged)
+# Function to generate text model response
 def generate_ai_explanation(jobs, user_query, client):
     prompt = get_ai_explanation_prompt(jobs, user_query) + "\n\n**Important Instructions:**\n1. Return **only** a valid JSON object with the following structure:\n```json\n{\n  \"overall_explanation\": \"A paragraph explaining the overall match\",\n  \"job_explanations\": {\n    \"job_id_1\": \"Explanation for job 1\",\n    \"job_id_2\": \"Explanation for job 2\"\n  }\n}\n```\n2. Do **not** include any additional text, comments, or <think> blocks outside the JSON.\n3. Ensure the JSON is complete and properly formatted.\n4. Be concise to avoid truncation (limit each explanation to 1-2 sentences)."
     
@@ -128,7 +128,7 @@ def get_query_embedding(query, api_key):
     return response.data[0].embedding
 
 # Function to calculate most relevant job offers
-def get_top_similar_jobs(query_embedding, job_vectors, top_n=10):
+def get_top_similar_jobs(query_embedding, job_vectors, top_n=40):  # Cambiado de 10 a 50
     similarities = []
     for job_id, job_data in job_vectors.items():
         job_embedding = np.array(job_data["embedding"])
@@ -138,8 +138,7 @@ def get_top_similar_jobs(query_embedding, job_vectors, top_n=10):
         job_embedding = job_embedding.reshape(1, -1)
         query_embedding_array = np.array(query_embedding).reshape(1, -1)
         similarity = cosine_similarity(query_embedding_array, job_embedding)[0][0]
-        if similarity > 0.5:
-            similarities.append((job_id, similarity, job_data["data"]))
+        similarities.append((job_id, similarity, job_data["data"]))  # Eliminada la condición similarity > 0.5
     similarities.sort(key=lambda x: x[1], reverse=True)
     return similarities[:top_n]
 

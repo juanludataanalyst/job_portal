@@ -51,15 +51,14 @@ if st.button("Search Jobs"):
                     if show_ai_explanations:
                         with st.spinner("Generating AI explanations..."):
                             ai_explanations = generate_ai_explanation(top_jobs, user_query, client)
-                            st.write("Debug: Contenido de ai_explanations:", ai_explanations)
-                
+                    
                     # Display overall explanation if available
                     if show_ai_explanations and ai_explanations and "overall_explanation" in ai_explanations:
                         st.markdown(f'<div class="overall-explanation"><h3>💡 Results Analysis</h3><p>{ai_explanations["overall_explanation"]}</p></div>', unsafe_allow_html=True)
                     elif show_ai_explanations:
                         st.markdown('<div class="overall-explanation"><h3>💡 Results Analysis</h3><p>No overall explanation available.</p></div>', unsafe_allow_html=True)
                     
-                    st.write(f"Showing the {len(top_jobs)} most relevant job offers (similarity > 0.5):")
+                    st.write(f"Showing the {len(top_jobs)} most relevant job offers:")
 
                     for job_id, similarity, job in top_jobs:
                         with st.container():
@@ -69,6 +68,9 @@ if st.button("Search Jobs"):
                                 formatted_date = date_obj.strftime("%d %b, %Y")
                             except:
                                 formatted_date = date_str
+                            
+                            # Calcular el porcentaje de coincidencia
+                            match_percentage = round(similarity * 100, 2)  # Convertir similarity a porcentaje y redondear a 2 decimales
                             
                             # Generar HTML para las skills
                             skills = job.get("skills", [])
@@ -80,7 +82,7 @@ if st.button("Search Jobs"):
                             else:
                                 skills_html = ''
                             
-                            # Construir el HTML de la tarjeta
+                            # Construir el HTML de la tarjeta con el % match
                             job_html = f"""
                             <div class="job-card">
                                 <div class="job-title">{job.get("title", "")}</div>
@@ -89,6 +91,7 @@ if st.button("Search Jobs"):
                                     <span>📍 {job.get("location", "")}</span>
                                     <span>📅 {formatted_date}</span>
                                     <span>🔍 {job.get("source", "")}</span>
+                                    <span>📊 {match_percentage}% match</span>
                                 </div>
                                 {skills_html}
                                 <div class="job-link">
