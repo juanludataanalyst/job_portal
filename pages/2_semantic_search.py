@@ -2,8 +2,9 @@ import streamlit as st
 import os
 from datetime import datetime
 import sys
+import json
 
-# Add the parent directory to sys.path to import functions from app.py
+# Add the parent directory to sys.path to import functions from streamlit_app.py
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from streamlit_app import (
     load_job_vectors, 
@@ -24,10 +25,8 @@ def load_css(css_file):
 
 # Load the CSS file
 try:
-    # Try to load from the current directory
     load_css('styles.css')
 except FileNotFoundError:
-    # If not found, try to load from the parent directory
     parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     load_css(os.path.join(parent_dir, 'styles.css'))
 
@@ -52,10 +51,13 @@ if st.button("Search Jobs"):
                     if show_ai_explanations:
                         with st.spinner("Generating AI explanations..."):
                             ai_explanations = generate_ai_explanation(top_jobs, user_query, client)
-                    
+                            st.write("Debug: Contenido de ai_explanations:", ai_explanations)
+                
                     # Display overall explanation if available
-                    if show_ai_explanations and "overall_explanation" in ai_explanations:
+                    if show_ai_explanations and ai_explanations and "overall_explanation" in ai_explanations:
                         st.markdown(f'<div class="overall-explanation"><h3>💡 Results Analysis</h3><p>{ai_explanations["overall_explanation"]}</p></div>', unsafe_allow_html=True)
+                    elif show_ai_explanations:
+                        st.markdown('<div class="overall-explanation"><h3>💡 Results Analysis</h3><p>No overall explanation available.</p></div>', unsafe_allow_html=True)
                     
                     st.write(f"Showing the {len(top_jobs)} most relevant job offers (similarity > 0.5):")
 
@@ -68,9 +70,17 @@ if st.button("Search Jobs"):
                             except:
                                 formatted_date = date_str
                             
+                            # Generar HTML para las skills
                             skills = job.get("skills", [])
-                            skills_html = '<div class="job-skills">' + ''.join(f'<span class="skill-tag">{skill}</span>' for skill in skills) + '</div>' if skills else ''
+                            if skills:
+                                skills_html = '<div class="job-skills">'
+                                for skill in skills:
+                                    skills_html += f'<span class="skill-tag">{skill}</span>'
+                                skills_html += '</div>'
+                            else:
+                                skills_html = ''
                             
+                            # Construir el HTML de la tarjeta
                             job_html = f"""
                             <div class="job-card">
                                 <div class="job-title">{job.get("title", "")}</div>
@@ -86,5 +96,18 @@ if st.button("Search Jobs"):
                                 </div>
                             </div>
                             """
+                            # Renderizar la tarjeta
                             st.markdown(job_html, unsafe_allow_html=True)
+
+                            # Mostrar la explicación individual debajo de la tarjeta
+                            if show_ai_explanations and ai_explanations and "job_explanations" in ai_explanations and job_id in ai_explanations["job_explanations"]:
+                                explanation_text = ai_explanations["job_explanations"][job_id]
+                                st.markdown(f'<div class="job-explanation"><h4>Why this job?</h4><p>{explanation_text}</p></div>', unsafe_allow_html=True)
+
                             st.markdown("---")
+                else:
+                    st.error("No relevant jobs found for your query.")
+            else:
+                st.error("Could not load job vectors.")
+    else:
+        st.warning("Please enter a query to search for jobs.")

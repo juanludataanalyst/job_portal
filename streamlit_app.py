@@ -24,28 +24,24 @@ TOGETHER_API_KEY = st.secrets["together"]["TOGETHER_API_KEY"]
 DEEPSEEK_MODEL = "deepseek-ai/DeepSeek-R1-Distill-Llama-70B-free"
 LLAMA_MODEL = "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
 
-# Load external CSS
-with open("styles.css", "r") as f:
-    st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
-
 # Function to generate text model response
 def generate_ai_explanation(jobs, user_query, client):
-    prompt = get_ai_explanation_prompt(jobs, user_query)
+    prompt = get_ai_explanation_prompt(jobs, user_query) + "\n\n**Important Instructions:**\n1. Return **only** a valid JSON object with the following structure:\n```json\n{\n  \"overall_explanation\": \"A paragraph explaining the overall match\",\n  \"job_explanations\": {\n    \"job_id_1\": \"Explanation for job 1\",\n    \"job_id_2\": \"Explanation for job 2\"\n  }\n}\n```\n2. Do **not** include any additional text, comments, or <think> blocks outside the JSON.\n3. Ensure the JSON is complete and properly formatted.\n4. Be concise to avoid truncation (limit each explanation to 1-2 sentences)."
     
     try:
         response = client.chat.completions.create(
             model=DEEPSEEK_MODEL,
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=1024,
+            max_tokens=2048,
             temperature=0.7
         )
-        explanation = response.choices[0].message.content
+        explanation = response.choices[0].message.content.strip()
     except Exception as e:
         try:
             response = client.chat.completions.create(
                 model=LLAMA_MODEL,
                 messages=[{"role": "user", "content": prompt}],
-                max_tokens=1024,
+                max_tokens=2048,
                 temperature=0.7
             )
             explanation = response.choices[0].message.content
@@ -53,22 +49,24 @@ def generate_ai_explanation(jobs, user_query, client):
             st.error(f"Error generating explanations: {str(e2)}")
             return {"overall_explanation": "Unable to generate explanations at this time.", "job_explanations": {}}
     
+    # Remove the <think> block
+    explanation = re.sub(r'<think>[\s\S]*?</think>', '', explanation).strip()
+    
+    # Extract the JSON content within ```json ... ```
+    json_match = re.search(r'```json\s*([\s\S]*?)\s*```', explanation)
+    if json_match:
+        json_str = json_match.group(1).strip()
+    else:
+        # If no triple backticks are found, assume the entire response is the JSON
+        json_str = explanation
+    
+    # Try to parse the JSON
     try:
-        try:
-            return json.loads(explanation)
-        except:
-            json_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', explanation)
-            if json_match:
-                return json.loads(json_match.group(1))
-            else:
-                json_match = re.search(r'({[\s\S]*})', explanation)
-                if json_match:
-                    return json.loads(json_match.group(1))
-                else:
-                    return {"overall_explanation": explanation, "job_explanations": {}}
-    except Exception as e:
-        st.warning(f"Could not parse AI explanation: {str(e)}")
-        return {"overall_explanation": explanation, "job_explanations": {}}
+        parsed_json = json.loads(json_str)
+        return parsed_json
+    except json.JSONDecodeError as e:
+        st.warning(f"Could not parse AI explanation as JSON: {str(e)}. Using raw text as overall explanation.")
+        return {"overall_explanation": "Error parsing AI explanation.", "job_explanations": {}}
 
 # Function to load data from JSON file
 @st.cache_data
@@ -121,5 +119,4 @@ def get_top_similar_jobs(query_embedding, job_vectors, top_n=10):
 # Title and welcome message
 st.title("Tech Job Portal")
 st.write("Welcome to the Tech Job Portal. Use the sidebar to navigate between pages.")
-
 st.caption("Job Portal - Built with Streamlit")

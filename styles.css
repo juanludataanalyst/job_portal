@@ -1,3 +1,17 @@
+.job-explanation {
+    background-color: #f9f9f9;
+    padding: 10px;
+    border-radius: 5px;
+    margin-top: 10px;
+    font-size: 0.9em;
+    color: #333;
+}
+
+.job-explanation h4 {
+    margin: 0 0 5px 0;
+    font-size: 1em;
+    color: #555;
+}
 .job-card {
     background-color: #f9f9f9;
     border-radius: 10px;
@@ -53,15 +67,6 @@
     border-radius: 15px;
     font-size: 12px;
     font-weight: 500;
-}
-.job-explanation {
-    background-color: #F5F5F5;
-    border-left: 3px solid #3498DB;
-    padding: 10px 15px;
-    margin-top: 10px;
-    border-radius: 0 5px 5px 0;
-    font-style: italic;
-    color: #444;
 }
 .overall-explanation {
     background-color: #EBF5FB;
