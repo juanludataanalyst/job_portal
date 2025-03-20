@@ -1,4 +1,6 @@
 joined_data_standar.json
+joined_data_*
+job_vector*
 ofertas_con_embeddings.json
 joined_data_standar_old.json
 job_vectors_instructorxl.pkl

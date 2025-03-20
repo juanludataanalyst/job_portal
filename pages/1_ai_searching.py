@@ -4,10 +4,9 @@ from datetime import datetime
 import sys
 import json
 
-# Add the parent directory to sys.path to import functions from streamlit_app.py
+# Add the parent directory to sys.path to import functions from streamlit_app.py and data_loader.py
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from streamlit_app import (
-    load_job_vectors, 
     get_query_embedding, 
     get_top_similar_jobs, 
     generate_ai_explanation,
@@ -15,6 +14,7 @@ from streamlit_app import (
     DEEPSEEK_MODEL,
     LLAMA_MODEL
 )
+from data_loader import load_job_vectors  # Importamos load_job_vectors desde data_loader
 from together import Together
 
 # Load CSS from the styles.css file in the root directory
@@ -30,6 +30,9 @@ except FileNotFoundError:
     parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     load_css(os.path.join(parent_dir, 'styles.css'))
 
+# Cargar los datos al inicio de la página
+job_vectors = load_job_vectors()
+
 st.title("AI Search")
 st.write("Search for job offers using a IA query.")
 
@@ -42,7 +45,6 @@ if st.button("Search Jobs"):
             os.environ['TOGETHER_API_KEY'] = TOGETHER_API_KEY
             client = Together()
             query_embedding = get_query_embedding(user_query, TOGETHER_API_KEY)
-            job_vectors = load_job_vectors()
             
             if job_vectors:
                 top_jobs = get_top_similar_jobs(query_embedding, job_vectors)
@@ -50,7 +52,8 @@ if st.button("Search Jobs"):
                     ai_explanations = {}
                     if show_ai_explanations:
                         with st.spinner("Generating AI explanations..."):
-                            ai_explanations = generate_ai_explanation(top_jobs, user_query, client)
+                            # Enviar solo los primeros 10 trabajos para las explicaciones
+                            ai_explanations = generate_ai_explanation(top_jobs[:10], user_query, client)
                     
                     # Display overall explanation if available
                     if show_ai_explanations and ai_explanations and "overall_explanation" in ai_explanations:

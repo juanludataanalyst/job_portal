@@ -3,9 +3,9 @@ from datetime import datetime
 import sys
 import os
 
-# Add the parent directory to sys.path to import functions from app.py
+# Add the parent directory to sys.path to import functions from data_loader.py
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from streamlit_app import load_data
+from data_loader import load_data  # Importamos load_data desde data_loader
 
 # Load CSS from the styles.css file in the root directory
 def load_css(css_file):
@@ -22,10 +22,11 @@ except FileNotFoundError:
     parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     load_css(os.path.join(parent_dir, 'styles.css'))
 
+# Cargar los datos al inicio de la página
+jobs_data = load_data()
+
 st.title("Explore Jobs")
 st.write("Explore available job offers in the tech sector.")
-
-jobs_data = load_data()
 
 if jobs_data:
     st.sidebar.header("Filters")

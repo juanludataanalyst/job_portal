@@ -3,12 +3,12 @@ import json
 import pickle
 from datetime import datetime
 import os
-import gdown
 from together import Together
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 import re
 from prompts import get_ai_explanation_prompt
+from data_loader import load_data, load_job_vectors  # Importamos las funciones desde data_loader
 
 # Page configuration
 st.set_page_config(
@@ -24,55 +24,6 @@ TOGETHER_API_KEY = st.secrets["together"]["TOGETHER_API_KEY"]
 # Free serverless models
 DEEPSEEK_MODEL = "deepseek-ai/DeepSeek-R1-Distill-Llama-70B-free"
 LLAMA_MODEL = "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
-
-# Google Drive file IDs
-JOINED_DATA_FILE_ID = "1ZgEJcIPdZstOwF0UVc0GJd4SBwmFDVBt"
-JOB_VECTORS_FILE_ID = "14ZsyQgkxjkKRIQtBNi8H7eX9yJaPbo5H"
-
-# Function to download file from Google Drive
-@st.cache_data
-def download_from_drive(file_id, output_path):
-    try:
-        url = f"https://drive.google.com/uc?id={file_id}"
-        gdown.download(url, output_path, quiet=False)
-        return output_path
-    except Exception as e:
-        st.error(f"Error downloading file from Google Drive: {e}")
-        return None
-
-# Function to load data from JSON file
-@st.cache_data
-def load_data():
-    try:
-        # Download the JSON file from Google Drive
-        json_path = "joined_data_standar.json"
-        downloaded_path = download_from_drive(JOINED_DATA_FILE_ID, json_path)
-        if downloaded_path:
-            with open(downloaded_path, "r", encoding="utf-8") as file:
-                data = json.load(file)
-            return data
-        else:
-            return []
-    except Exception as e:
-        st.error(f"Error loading JSON file: {e}")
-        return []
-
-# Function to load pre-calculated vectors
-@st.cache_data
-def load_job_vectors():
-    try:
-        # Download the pickle file from Google Drive
-        pkl_path = "job_vectors.pkl"
-        downloaded_path = download_from_drive(JOB_VECTORS_FILE_ID, pkl_path)
-        if downloaded_path:
-            with open(downloaded_path, "rb") as f:
-                job_vectors = pickle.load(f)
-            return job_vectors
-        else:
-            return {}
-    except Exception as e:
-        st.error(f"Error loading job_vectors.pkl: {e}")
-        return {}
 
 # Function to generate text model response
 def generate_ai_explanation(jobs, user_query, client):
@@ -128,7 +79,7 @@ def get_query_embedding(query, api_key):
     return response.data[0].embedding
 
 # Function to calculate most relevant job offers
-def get_top_similar_jobs(query_embedding, job_vectors, top_n=40):  # Cambiado de 10 a 50
+def get_top_similar_jobs(query_embedding, job_vectors, top_n=50):
     similarities = []
     for job_id, job_data in job_vectors.items():
         job_embedding = np.array(job_data["embedding"])
@@ -138,7 +89,7 @@ def get_top_similar_jobs(query_embedding, job_vectors, top_n=40):  # Cambiado de
         job_embedding = job_embedding.reshape(1, -1)
         query_embedding_array = np.array(query_embedding).reshape(1, -1)
         similarity = cosine_similarity(query_embedding_array, job_embedding)[0][0]
-        similarities.append((job_id, similarity, job_data["data"]))  # Eliminada la condición similarity > 0.5
+        similarities.append((job_id, similarity, job_data["data"]))
     similarities.sort(key=lambda x: x[1], reverse=True)
     return similarities[:top_n]
 
@@ -146,3 +97,7 @@ def get_top_similar_jobs(query_embedding, job_vectors, top_n=40):  # Cambiado de
 st.title("Tech Job Portal")
 st.write("Welcome to the Tech Job Portal. Use the sidebar to navigate between pages.")
 st.caption("Job Portal - Built with Streamlit")
+
+# Cargar los datos al inicio de la página principal
+data = load_data()
+job_vectors = load_job_vectors()
