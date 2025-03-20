@@ -3,10 +3,10 @@ import json
 import pickle
 from datetime import datetime
 import os
+import gdown
 from together import Together
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
-import re
 from prompts import get_ai_explanation_prompt
 
 # Page configuration
@@ -24,7 +24,56 @@ TOGETHER_API_KEY = st.secrets["together"]["TOGETHER_API_KEY"]
 DEEPSEEK_MODEL = "deepseek-ai/DeepSeek-R1-Distill-Llama-70B-free"
 LLAMA_MODEL = "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
 
-# Function to generate text model response
+# Google Drive file IDs
+JOINED_DATA_FILE_ID = "1ZgEJcIPdZstOwF0UVc0GJd4SBwmFDVBt"  # Reemplaza con el ID de joined_data_standar.json
+JOB_VECTORS_FILE_ID = "14ZsyQgkxjkKRIQtBNi8H7eX9yJaPbo5H"  # Reemplaza con el ID de job_vectors.pkl
+
+# Function to download file from Google Drive
+@st.cache_data
+def download_from_drive(file_id, output_path):
+    try:
+        url = f"https://drive.google.com/uc?id={file_id}"
+        gdown.download(url, output_path, quiet=False)
+        return output_path
+    except Exception as e:
+        st.error(f"Error downloading file from Google Drive: {e}")
+        return None
+
+# Function to load data from JSON file
+@st.cache_data
+def load_data():
+    try:
+        # Download the JSON file from Google Drive
+        json_path = "joined_data_standar.json"
+        downloaded_path = download_from_drive(JOINED_DATA_FILE_ID, json_path)
+        if downloaded_path:
+            with open(downloaded_path, "r", encoding="utf-8") as file:
+                data = json.load(file)
+            return data
+        else:
+            return []
+    except Exception as e:
+        st.error(f"Error loading JSON file: {e}")
+        return []
+
+# Function to load pre-calculated vectors
+@st.cache_data
+def load_job_vectors():
+    try:
+        # Download the pickle file from Google Drive
+        pkl_path = "job_vectors.pkl"
+        downloaded_path = download_from_drive(JOB_VECTORS_FILE_ID, pkl_path)
+        if downloaded_path:
+            with open(downloaded_path, "rb") as f:
+                job_vectors = pickle.load(f)
+            return job_vectors
+        else:
+            return {}
+    except Exception as e:
+        st.error(f"Error loading job_vectors.pkl: {e}")
+        return {}
+
+# Function to generate text model response (unchanged)
 def generate_ai_explanation(jobs, user_query, client):
     prompt = get_ai_explanation_prompt(jobs, user_query) + "\n\n**Important Instructions:**\n1. Return **only** a valid JSON object with the following structure:\n```json\n{\n  \"overall_explanation\": \"A paragraph explaining the overall match\",\n  \"job_explanations\": {\n    \"job_id_1\": \"Explanation for job 1\",\n    \"job_id_2\": \"Explanation for job 2\"\n  }\n}\n```\n2. Do **not** include any additional text, comments, or <think> blocks outside the JSON.\n3. Ensure the JSON is complete and properly formatted.\n4. Be concise to avoid truncation (limit each explanation to 1-2 sentences)."
     
@@ -57,7 +106,6 @@ def generate_ai_explanation(jobs, user_query, client):
     if json_match:
         json_str = json_match.group(1).strip()
     else:
-        # If no triple backticks are found, assume the entire response is the JSON
         json_str = explanation
     
     # Try to parse the JSON
@@ -67,28 +115,6 @@ def generate_ai_explanation(jobs, user_query, client):
     except json.JSONDecodeError as e:
         st.warning(f"Could not parse AI explanation as JSON: {str(e)}. Using raw text as overall explanation.")
         return {"overall_explanation": "Error parsing AI explanation.", "job_explanations": {}}
-
-# Function to load data from JSON file
-@st.cache_data
-def load_data():
-    try:
-        with open("joined_data_standar.json", "r", encoding="utf-8") as file:
-            data = json.load(file)
-        return data
-    except Exception as e:
-        st.error(f"Error loading JSON file: {e}")
-        return []
-
-# Function to load pre-calculated vectors
-@st.cache_data
-def load_job_vectors():
-    try:
-        with open("job_vectors.pkl", "rb") as f:
-            job_vectors = pickle.load(f)
-        return job_vectors
-    except Exception as e:
-        st.error(f"Error loading job_vectors.pkl: {e}")
-        return {}
 
 # Function to get query embedding
 def get_query_embedding(query, api_key):
