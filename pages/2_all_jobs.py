@@ -30,19 +30,15 @@ jobs_data = load_data()
 if jobs_data:
     st.sidebar.header("Filters")
     companies = ["All"] + sorted(set(job.get("company", "") for job in jobs_data))
-    locations = ["All"] + sorted(set(job.get("location", "") for job in jobs_data))
     sources = ["All"] + sorted(set(job.get("source", "") for job in jobs_data))
     
     selected_company = st.sidebar.selectbox("Company", companies)
-    selected_location = st.sidebar.selectbox("Location", locations)
     selected_source = st.sidebar.selectbox("Source", sources)
     search_term = st.sidebar.text_input("Search by title or company", "")
     
     filtered_jobs = jobs_data.copy()
     if selected_company != "All":
         filtered_jobs = [job for job in filtered_jobs if job.get("company") == selected_company]
-    if selected_location != "All":
-        filtered_jobs = [job for job in filtered_jobs if job.get("location") == selected_location]
     if selected_source != "All":
         filtered_jobs = [job for job in filtered_jobs if job.get("source") == selected_source]
     if search_term:

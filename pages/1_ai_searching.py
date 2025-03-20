@@ -30,8 +30,8 @@ except FileNotFoundError:
     parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     load_css(os.path.join(parent_dir, 'styles.css'))
 
-st.title("Semantic Search")
-st.write("Search for job offers using a semantic query.")
+st.title("AI Search")
+st.write("Search for job offers using a IA query.")
 
 user_query = st.text_input("Enter your query (example: 'AI engineer with Python')", "")
 show_ai_explanations = st.checkbox("Show AI explanations", value=True)
