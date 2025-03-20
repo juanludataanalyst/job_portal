@@ -8,6 +8,7 @@ from together import Together
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 from prompts import get_ai_explanation_prompt
+import re
 
 # Page configuration
 st.set_page_config(
