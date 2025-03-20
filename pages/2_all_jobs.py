@@ -58,8 +58,15 @@ if jobs_data:
             except:
                 formatted_date = date_str
             
+            # Generar HTML para las skills
             skills = job.get("skills", [])
-            skills_html = '<div class="job-skills">' + ''.join(f'<span class="skill-tag">{skill}</span>' for skill in skills) + '</div>' if skills else ''
+            if skills:
+                skills_html = '<div class="job-skills">'
+                for skill in skills:
+                    skills_html += f'<span class="skill-tag">{skill}</span>'
+                skills_html += '</div>'
+            else:
+                skills_html = '<div class="job-skills"><span class="skill-tag">No skills specified</span></div>'
             
             job_html = f"""
             <div class="job-card">
@@ -72,7 +79,7 @@ if jobs_data:
                 </div>
                 {skills_html}
                 <div class="job-link">
-                    <a href="{job.get("link", "")}" target="_blank">View job</a>
+                    <a href="{job.get("link", "")}" target="_blank" class="view-job-button">View job</a>
                 </div>
             </div>
             """

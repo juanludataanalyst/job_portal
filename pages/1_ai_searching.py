@@ -83,7 +83,7 @@ if st.button("Search Jobs"):
                                     skills_html += f'<span class="skill-tag">{skill}</span>'
                                 skills_html += '</div>'
                             else:
-                                skills_html = ''
+                                skills_html = '<div class="job-skills"><span class="skill-tag">No skills specified</span></div>'
                             
                             # Construir el HTML de la tarjeta con el % match
                             job_html = f"""
@@ -98,7 +98,7 @@ if st.button("Search Jobs"):
                                 </div>
                                 {skills_html}
                                 <div class="job-link">
-                                    <a href="{job.get("link", "")}" target="_blank">View job</a>
+                                    <a href="{job.get("link", "")}" target="_blank" class="view-job-button">View job</a>
                                 </div>
                             </div>
                             """
