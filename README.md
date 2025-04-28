@@ -1,5 +1,7 @@
 # 💼 Tech Job Portal
 
+![Demo](demo/video.gif)
+
 **Tech Job Portal** is an intelligent job portal for the tech sector, using AI and semantic search to recommend the best job offers to each user.
 
 ---
